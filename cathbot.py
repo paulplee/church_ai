@@ -25,7 +25,7 @@ def get_function_name(item_dict):
     return None
         
 def main():
-    cleanup_assistants()
+    # cleanup_assistants()
     
     # 5treamlit interface
     
