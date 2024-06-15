@@ -25,7 +25,6 @@ def get_function_name(item_dict):
     return None
         
 def main():
-    # cleanup_assistants()
     
     # 5treamlit interface
     
@@ -34,8 +33,8 @@ def main():
 
     state = SessionState.get(manager=None)
             
-            
     if state.manager is None:
+        cleanup_assistants()
         state.manager = AssistantManager()
 
         print("CREW: ", len(Crew))
@@ -45,10 +44,7 @@ def main():
                 assistant_template = template                
             ) 
 
-        # for name, assistant in AssistantManager.assistants.items():
-        #     print(f"Assistant name: {name}, ID: {assistant.id}")
-
-    state.manager.assistant = AssistantManager.assistants["alpha_Greeter"]
+    state.manager.assistant = AssistantManager.assistants["cathbot_general"]
 
     current_step.text("create_thread()")
     state.manager.create_thread()
@@ -63,10 +59,10 @@ def main():
             current_step.text("add_message_to_thread()")
             state.manager.add_message_to_thread(
                 role = "user",
-                content=f"{instructions}")
+                content=f"{instructions}") 
             
             current_step.text("run_assistant()")            
-            state.manager.run_assistant(instructions = "Help the user find the right insurance plan")
+            state.manager.run_assistant(instructions="")
             
             current_step.text("Waiting for completion...")
             state.manager.wait_for_completion()

@@ -9,7 +9,7 @@ load_dotenv()
 
 news_api_key = os.environ.get("NEWS_API_KEY")
 client = openai.OpenAI()
-model = "gpt-3.5-turbo"
+model = "gpt-4-turbo"
 
 
 class AssistantManager:
@@ -30,18 +30,66 @@ class AssistantManager:
         if AssistantManager.assistant_id:
             self.assistant = self.client.beta.assistants.retrieve(assistant_id=AssistantManager.assistant_id)
         if AssistantManager.thread_id:
-            self.thread = self.assistant.threads.retrieve(thread_id=AssistantManager.thread_id)
+            self.thread = self.client.beta.threads.retrieve(thread_id=AssistantManager.thread_id)
             
-    def handle_function_call(self, function_name, params):
-        if function_name == 'triage_insurance_type':
-        # Create a new assistant or modify the prompt
-            print(f"========{function_name}: {params}========")
-            if params == 'travel':
-                self.assistant = self.assistants["alpha_Travel_Agent"]
-            
-        elif function_name == 'ask_again':
-            print(f"========{function_name}: {params}========")
 
+
+    def handle_function_call(self, function_name, params):
+        
+        function_call_result = ""
+        if function_name == 'redirect_assistant':
+        # Create a new assistant or modify the prompt
+        #     print(f"========{function_name}: {params}========")
+        #     if params == 'travel':
+        #         self.assistant = self.assistants["alpha_Travel_Agent"]
+            
+        # elif function_name == 'ask_again':
+        #     print(f"========{function_name}: {params}========")
+            function_call_result = self.redirect_assistant(params)
+            print(f"========function call result: {function_call_result}========")
+        run_tool_submit = client.beta.threads.runs.submit_tool_outputs(
+            thread_id=self.thread.id,
+            run_id=self.run.id,
+            tool_outputs=[
+                {
+                "tool_call_id": self.run.required_action.submit_tool_outputs.tool_calls[0].id,
+                "output": function_call_result
+                }
+            ]
+        )
+        self.wait_for_run(run_tool_submit)
+
+
+    def wait_for_run(self, run_to_wait):
+        while True:
+            run_wait = client.beta.threads.runs.retrieve(
+                thread_id= self.thread.id,
+                run_id = run_to_wait.id
+            )
+            if run_wait.status == "completed":
+                messages = client.beta.threads.messages.list(
+                thread_id=self.thread.id
+                )
+                for i in range(len(messages.data)):
+                    print(messages.data[i].content[0].text.value)
+                break
+            print("Waiting to complete:" + run_wait.status)
+            time.sleep(1)
+
+
+    # python function to change assistant
+    def redirect_assistant(self, assistant_name):
+        print("Redirecting to " + assistant_name)
+        if assistant_name in ["catechism", "bioethics"]:
+            if assistant_name == 'catechism':
+                self.assistant = self.assistants["cathbot_catechism"]
+            else:
+                self.assistant = self.assistants["cathbot_bioethics"]
+
+            print("changing assistant to:" + self.assistant.name)
+            return "refering to " + assistant_name + " for further explanation"
+        else:
+            return "no specialist assistant here.  Keep it general."
 
     def create_assistant(self, assistant_template):
         # unique_tools = list(assistant_template.tools)
@@ -70,7 +118,7 @@ class AssistantManager:
                 role=role,
                 content=content
             )
-            print(f"========add_message_to_thread()========")
+            # print(f"========add_message_to_thread()========")
 
     
     def run_assistant(self, instructions):
@@ -80,7 +128,7 @@ class AssistantManager:
                 assistant_id=self.assistant.id,
                 instructions=instructions
             )
-            print(f"========run_assistant()========")
+            # print(f"========run_assistant()========")
 
             
     def process_messages(self):
@@ -115,32 +163,35 @@ class AssistantManager:
             arguments = json.loads(action["function"]["arguments"])
             print(f"***FUNCTION NAME: {function_name}")
             
-            if function_name == "triage_insurance_type":
-                output = self.handle_function_call(function_name=function_name, params=arguments["insurance_type"])
-                print(f"OUTPUT: {output}")
-                final_str = ""
-                if output:
-                    for item in output:
-                        final_str += "".join(item)
-                tool_outputs.append({"tool_call_id": action["id"], "output": final_str})
-                
-            elif function_name == "ask_again":
-                output = self.handle_function_call(function_name=function_name, params=arguments["summary"])
-                print(f"OUTPUT: {output}")
-                final_str = ""
-                if output:
-                    for item in output:
-                        final_str += "".join(item)
-                tool_outputs.append({"tool_call_id": action["id"], "output": final_str})
-                
+            if function_name == "redirect_assistant":
+                # output = self.handle_function_call(function_name=function_name, params=arguments["assistant_name"])
+                # print(f"OUTPUT: {output}")
+                # final_str = ""
+                # if output:
+                #     for item in output:
+                #         final_str += "".join(item)
+                # tool_outputs.append({"tool_call_id": action["id"], "output": final_str})
+                self.redirect_assistant(arguments["assistant_name"])
+                run_tool_submit = client.beta.threads.runs.submit_tool_outputs(
+                    thread_id=self.thread.id,
+                    run_id=self.run.id,
+                    tool_outputs=[
+                        {
+                        "tool_call_id": action["id"],
+                        "output": "output"
+                        }
+                    ]
+                )
+                self.wait_for_run(run_tool_submit)
+                            
             else:
                 raise ValueError(f"Invalid function name: {function_name}")
         print("Submitting outputs back to the Assistant...")
-        self.client.beta.threads.runs.submit_tool_outputs(
-            thread_id=self.thread.id,
-            run_id=self.run.id,
-            tool_outputs=tool_outputs
-        )
+        # self.client.beta.threads.runs.submit_tool_outputs(
+        #     thread_id=self.thread.id,
+        #     run_id=self.run.id,
+        #     tool_outputs=tool_outputs
+        # )
 
     # For Streamlit
     def get_summary(self):
@@ -165,13 +216,24 @@ class AssistantManager:
                     break
                 elif run_status.status == "requires_action":
                     print(f"\nRun Status is REQUIRES_ACTION\n")
+                    
+                    # getting the first call, can have multiple actions
+                    required_action = run_status.required_action
+                    print(f"Required Action: {required_action}")
+                    type = required_action.type
+                    print(f"Required Action Type: {type}")
+                    first_tool_call = run_status.required_action.submit_tool_outputs.tool_calls[0]
+                    tool_call_id = first_tool_call.id
+                    function_name = first_tool_call.function.name
+                    function_parameters = first_tool_call.function.arguments
+
                     results=self.call_required_function(
                         required_actions=run_status.required_action.submit_tool_outputs.model_dump()
                     )
-                    # return results
+                    return results
 
 
-    # Run the steps
+    # Get back a log of all the steps executed by the assistant
     def run_steps(self):
         print(f"========run_steps()========")
         run_steps = self.client.beta.threads.runs.steps.list(

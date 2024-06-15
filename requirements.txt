@@ -2,3 +2,6 @@ python-dotenv
 openai
 requests
 streamlit
+beautifulsoup4
+PyPdf2
+pdfplumber
