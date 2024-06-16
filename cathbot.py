@@ -66,7 +66,12 @@ def main():
             
             current_step.text("Waiting for completion...")
             state.manager.wait_for_completion()
+            
+            
+            state.manager.process_messages()
             summary = state.manager.get_summary()
+            
+            summary += f"\n\n\t\t\t-- {state.manager.assistant.name}"
             st.write(summary)
             st.text("Run Steps:")
             # st.code(manager.run_steps(), line_numbers=True, language='md')

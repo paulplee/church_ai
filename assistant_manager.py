@@ -67,11 +67,7 @@ class AssistantManager:
                 run_id = run_to_wait.id
             )
             if run_wait.status == "completed":
-                messages = client.beta.threads.messages.list(
-                thread_id=self.thread.id
-                )
-                for i in range(len(messages.data)):
-                    print(messages.data[i].content[0].text.value)
+                print("Run completed:" + run_wait.status)
                 break
             print("Waiting to complete:" + run_wait.status)
             time.sleep(1)
@@ -158,40 +154,60 @@ class AssistantManager:
             return
         tool_outputs = []
         for action in required_actions["tool_calls"]:
-            print(f"***REQUIRED ACTION: {action}")
             function_name = action["function"]["name"]
+            print(f"***REQUIRED ACTION: {action}")
+            tool_call_id = action["id"]
+            # tool_call_id = required_actions.tool_calls[0].id
             arguments = json.loads(action["function"]["arguments"])
+            print(f"***TOOL CALL ID: {tool_call_id}")
             print(f"***FUNCTION NAME: {function_name}")
-            
+            print(f"***ARGUMENTS: {arguments}")
+            print(f"***tool_call_id: {tool_call_id}")
             if function_name == "redirect_assistant":
-                # output = self.handle_function_call(function_name=function_name, params=arguments["assistant_name"])
-                # print(f"OUTPUT: {output}")
-                # final_str = ""
-                # if output:
-                #     for item in output:
-                #         final_str += "".join(item)
-                # tool_outputs.append({"tool_call_id": action["id"], "output": final_str})
-                self.redirect_assistant(arguments["assistant_name"])
-                run_tool_submit = client.beta.threads.runs.submit_tool_outputs(
-                    thread_id=self.thread.id,
-                    run_id=self.run.id,
-                    tool_outputs=[
-                        {
-                        "tool_call_id": action["id"],
-                        "output": "output"
-                        }
-                    ]
-                )
-                self.wait_for_run(run_tool_submit)
+                output = self.redirect_assistant(arguments['assistant_name'])
+
                             
             else:
                 raise ValueError(f"Invalid function name: {function_name}")
-        print("Submitting outputs back to the Assistant...")
-        # self.client.beta.threads.runs.submit_tool_outputs(
-        #     thread_id=self.thread.id,
-        #     run_id=self.run.id,
-        #     tool_outputs=tool_outputs
-        # )
+
+            run_tool_submit = client.beta.threads.runs.submit_tool_outputs(
+                thread_id=self.thread.id,
+                run_id=self.run.id,
+                tool_outputs=[
+                    {
+                        "tool_call_id": tool_call_id,
+                        "output": output
+                    }
+                ]
+            )
+            self.wait_for_run(run_tool_submit)
+            print('*********Printing Messages*********')
+            messages = client.beta.threads.messages.list(
+                thread_id=self.thread.id
+            )
+            for i in range(len(messages.data)):
+                print(messages.data[i].content[0].text.value)
+            print('*********END of Printing Messages*********')
+
+            # submit a message on behalf of user, and ask for more detail.  The current assistant should now be either history or math, or still for general
+            message = client.beta.threads.messages.create(
+                self.thread.id,
+                role="user",
+                content="Please give me more details"
+            )
+            run = client.beta.threads.runs.create(
+                thread_id = self.thread.id,
+                assistant_id = self.assistant.id
+            )
+            self.wait_for_run(run)
+            messages = client.beta.threads.messages.list(
+            thread_id=self.thread.id
+            )
+
+
+            for i in range(len(messages.data)):
+                print(messages.data[i].content[0].text.value)
+
 
     # For Streamlit
     def get_summary(self):
@@ -208,7 +224,6 @@ class AssistantManager:
                     thread_id=self.thread.id,
                     run_id=self.run.id
                 )
-                # print(f"RUN STATUS: {run_status.model_dump_json(indent=4)}")
                 
                 if run_status.status == "completed":
                     print(f"\nRun Status is COMPLETED\n")
@@ -218,15 +233,6 @@ class AssistantManager:
                     print(f"\nRun Status is REQUIRES_ACTION\n")
                     
                     # getting the first call, can have multiple actions
-                    required_action = run_status.required_action
-                    print(f"Required Action: {required_action}")
-                    type = required_action.type
-                    print(f"Required Action Type: {type}")
-                    first_tool_call = run_status.required_action.submit_tool_outputs.tool_calls[0]
-                    tool_call_id = first_tool_call.id
-                    function_name = first_tool_call.function.name
-                    function_parameters = first_tool_call.function.arguments
-
                     results=self.call_required_function(
                         required_actions=run_status.required_action.submit_tool_outputs.model_dump()
                     )
