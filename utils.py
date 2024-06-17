@@ -8,7 +8,7 @@ def cleanup_assistants():
     # List all assistants
     assistants = client.beta.assistants.list()
     for assistant in assistants.data:
-        if "alpha_" in assistant.name or "alpha_" in assistant.name:
+        if "alpha_" in assistant.name or "cathbot_" in assistant.name:
             print(f"XXX DELETING: Assistant ID: {assistant.id}, Name: {assistant.name}")
             client.beta.assistants.delete(assistant.id)
             assistants.data.remove(assistant)
