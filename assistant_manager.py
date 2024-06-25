@@ -9,7 +9,7 @@ load_dotenv()
 
 news_api_key = os.environ.get("NEWS_API_KEY")
 client = openai.OpenAI()
-model = "gpt-4-turbo"
+model = "gpt-3.5-turbo"
 
 
 class AssistantManager:
